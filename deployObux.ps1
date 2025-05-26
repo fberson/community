@@ -9,6 +9,9 @@ try {
     # Convert sharedata to boolean
     $sharedataBool = if ($sharedata -eq 'true') { $true } elseif ($sharedata -eq 'false') { $false } else { throw "Invalid value for sharedata: $sharedata" }
 
+    # Convert insightinterval to integer
+    $insightintervalInt = [int]$insightinterval
+
     # Log script start
     Add-Content -Path C:\obux\obux_log.txt -Value 'Script execution started';
 
@@ -21,7 +24,7 @@ try {
     }
 
     # Log parameters
-    Add-Content -Path C:\obux\obux_log.txt -Value "Parameters: email=$email, benchmark=$benchmark, sharedata=$sharedataBool, insightinterval=$insightinterval";
+    Add-Content -Path C:\obux\obux_log.txt -Value "Parameters: email=$email, benchmark=$benchmark, sharedata=$sharedataBool, insightinterval=$insightintervalInt";
 
     # Download the installer
     Invoke-WebRequest -Uri https://media.githubusercontent.com/media/OBUX-IT/obux-benchmark/refs/heads/main/OBUXBenchmark.zip -OutFile C:\obux\OBUXBootstrapper.zip;
@@ -32,7 +35,7 @@ try {
     Add-Content -Path C:\obux\obux_log.txt -Value 'Extracted OBUXBootstrapper.zip to C:\Program Files\OBUX';
 
     # Run the installer
-    Start-Process -Wait -FilePath "C:\Program Files\OBUX\Wrapper\OBUX Benchmark.exe" -ArgumentList "/silent /email:$email /benchmark:$benchmark /sharedata:$sharedataBool /insightinterval:$insightinterval";
+    Start-Process -Wait -FilePath "C:\Program Files\OBUX\Wrapper\OBUX Benchmark.exe" -ArgumentList "/silent /email:$email /benchmark:$benchmark /sharedata:$sharedataBool /insightinterval:$insightintervalInt";
     Add-Content -Path C:\obux\obux_log.txt -Value 'OBUX installation completed';
 } catch {
     # Log any errors
