@@ -1,11 +1,14 @@
 param (
     [string]$email,
     [string]$benchmark,
-    [bool]$sharedata,
+    [string]$sharedata, # Changed to string to handle conversion
     [int]$insightinterval
 )
 
 try {
+    # Convert sharedata to boolean
+    $sharedataBool = if ($sharedata -eq 'true') { $true } elseif ($sharedata -eq 'false') { $false } else { throw "Invalid value for sharedata: $sharedata" }
+
     # Log script start
     Add-Content -Path C:\obux\obux_log.txt -Value 'Script execution started';
 
@@ -18,19 +21,18 @@ try {
     }
 
     # Log parameters
-    Add-Content -Path C:\obux\obux_log.txt -Value "Parameters: email=$email, benchmark=$benchmark, sharedata=$sharedata, insightinterval=$insightinterval";
+    Add-Content -Path C:\obux\obux_log.txt -Value "Parameters: email=$email, benchmark=$benchmark, sharedata=$sharedataBool, insightinterval=$insightinterval";
 
     # Download the installer
-    Invoke-WebRequest -Uri https://github.com/OBUX-IT/obux-benchmark/releases/latest/download/OBUXBootstrapper.zip -OutFile C:\obux\OBUXBootstrapper.zip;
+    Invoke-WebRequest -Uri https://media.githubusercontent.com/media/OBUX-IT/obux-benchmark/refs/heads/main/OBUXBenchmark.zip -OutFile C:\obux\OBUXBootstrapper.zip;
     Add-Content -Path C:\obux\obux_log.txt -Value 'Downloaded OBUXBootstrapper.zip';
 
     # Extract the installer
-    Expand-Archive -Path C:\obux\OBUXBootstrapper.zip -DestinationPath C:\obux\OBUXBootstrapper;
-    Add-Content -Path C:\obux\obux_log.txt -Value 'Extracted OBUXBootstrapper.zip';
+    Expand-Archive -Path C:\obux\OBUXBootstrapper.zip -DestinationPath "C:\Program Files\OBUX";
+    Add-Content -Path C:\obux\obux_log.txt -Value 'Extracted OBUXBootstrapper.zip to C:\Program Files\OBUX';
 
     # Run the installer
-    Set-Locationt C:\obux\OBUXBootstrapper;
-    Start-Process -Wait -FilePath .\OBUXBootstrapper.exe -ArgumentList "/silent /email:$email /benchmark:$benchmark /sharedata:$sharedata /insightinterval:$insightinterval";
+    Start-Process -Wait -FilePath "C:\Program Files\OBUX\Wrapper\OBUX Benchmark.exe" -ArgumentList "/silent /email:$email /benchmark:$benchmark /sharedata:$sharedataBool /insightinterval:$insightinterval";
     Add-Content -Path C:\obux\obux_log.txt -Value 'OBUX installation completed';
 } catch {
     # Log any errors
