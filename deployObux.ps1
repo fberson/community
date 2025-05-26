@@ -17,10 +17,20 @@ try {
 
     # Ensure the C:\obux directory exists
     if (-not (Test-Path -Path 'C:\obux')) {
-        New-Item -ItemType Directory -Path 'C:\obux' | Out-Null;
-        Add-Content -Path C:\obux\obux_log.txt -Value 'Created C:\obux directory';
+        try {
+            New-Item -ItemType Directory -Path 'C:\obux' -Force | Out-Null;
+            Add-Content -Path C:\obux\obux_log.txt -Value 'Created C:\obux directory';
+        } catch {
+            Write-Error "Failed to create C:\obux directory: $_"
+            throw;
+        }
     } else {
-        Add-Content -Path C:\obux\obux_log.txt -Value 'C:\obux directory already exists';
+        try {
+            Add-Content -Path C:\obux\obux_log.txt -Value 'C:\obux directory already exists';
+        } catch {
+            Write-Error "Failed to write to C:\obux\obux_log.txt: $_"
+            throw;
+        }
     }
 
     # Log parameters
