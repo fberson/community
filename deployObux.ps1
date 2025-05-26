@@ -26,17 +26,17 @@ try {
     # Log parameters
     Add-Content -Path C:\obux\obux_log.txt -Value "Parameters: email=$email, benchmark=$benchmark, sharedata=$sharedataBool, insightinterval=$insightintervalInt";
 
-    # Download the installer
-    Invoke-WebRequest -Uri https://media.githubusercontent.com/media/OBUX-IT/obux-benchmark/refs/heads/main/OBUXBenchmark.zip -OutFile C:\obux\OBUXBootstrapper.zip;
-    Add-Content -Path C:\obux\obux_log.txt -Value 'Downloaded OBUXBootstrapper.zip';
+    # Download the OBUX Bootstrapper installer
+    Invoke-WebRequest -Uri https://media.githubusercontent.com/media/OBUX-IT/obux-benchmark/refs/heads/main/OBUXBootstrapper.exe -OutFile C:\obux\OBUXBootstrapper.exe;
+    Add-Content -Path C:\obux\obux_log.txt -Value 'Downloaded OBUXBootstrapper.exe';
 
-    # Extract the installer
-    Expand-Archive -Path C:\obux\OBUXBootstrapper.zip -DestinationPath "C:\Program Files\OBUX";
-    Add-Content -Path C:\obux\obux_log.txt -Value 'Extracted OBUXBootstrapper.zip to C:\Program Files\OBUX';
+    # Run the OBUX Bootstrapper installer
+    Start-Process -Wait -FilePath C:\obux\OBUXBootstrapper.exe -ArgumentList "/silent";
+    Add-Content -Path C:\obux\obux_log.txt -Value 'OBUX Bootstrapper installation completed';
 
-    # Run the installer
+    # Run the installed OBUX Benchmark executable
     Start-Process -Wait -FilePath "C:\Program Files\OBUX\Wrapper\OBUX Benchmark.exe" -ArgumentList "/silent /email:$email /benchmark:$benchmark /sharedata:$sharedataBool /insightinterval:$insightintervalInt";
-    Add-Content -Path C:\obux\obux_log.txt -Value 'OBUX installation completed';
+    Add-Content -Path C:\obux\obux_log.txt -Value 'OBUX Benchmark execution completed';
 } catch {
     # Log any errors
     Add-Content -Path C:\obux\obux_log.txt -Value $_.Exception.Message;
