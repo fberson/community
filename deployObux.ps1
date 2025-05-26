@@ -1,4 +1,3 @@
-
 param (
     [string]$email,
     [string]$benchmark,
@@ -30,7 +29,7 @@ try {
     Add-Content -Path C:\obux\obux_log.txt -Value 'Extracted OBUXBootstrapper.zip';
 
     # Run the installer
-    cd C:\obux\OBUXBootstrapper;
+    Set-Locationt C:\obux\OBUXBootstrapper;
     Start-Process -Wait -FilePath .\OBUXBootstrapper.exe -ArgumentList "/silent /email:$email /benchmark:$benchmark /sharedata:$sharedata /insightinterval:$insightinterval";
     Add-Content -Path C:\obux\obux_log.txt -Value 'OBUX installation completed';
 } catch {
