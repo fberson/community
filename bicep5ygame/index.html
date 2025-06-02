@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bicep 5 Year Anniversary Adventure</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="start-screen">
+        <input id="player-name" type="text" placeholder="Enter your name" maxlength="16" style="font-size:1.1rem;padding:0.5rem 1rem;margin-bottom:1rem;border-radius:8px;border:1px solid #ccc;" />
+        <button id="start-btn">Start Game</button>
+    </div>
+    <div id="did-you-know"></div>
+    <canvas id="game-canvas" width="600" height="400" style="display:none;"></canvas>
+    <div id="end-screen" style="display:none;">
+        <h2>Congratulations!</h2>
+        <p id="final-score"></p>
+        <h3>🏆 High Scores 🏆</h3>
+        <ol id="high-scores"></ol>
+        <button id="restart-btn">Play Again</button>
+    </div>
+    <div id="credit-note">Freek Berson - Microsoft MVP</div>
+    <script src="game.js"></script>
+</body>
+</html>
