@@ -122,25 +122,36 @@ try {
     throw
 }
 
-try {
-    # Upload CSV results to the storage account
-    $resultsFolderPath = "C:\Program Files\OBUX\Results" # Root folder for results
-    if (Test-Path -Path $resultsFolderPath) {
-        $csvFiles = Get-ChildItem -Path $resultsFolderPath -Filter '*.csv'
-        foreach ($csvFile in $csvFiles) {
-            $vmFolderUri = "https://${storageAccountName}.blob.core.windows.net/${containername}/${benchmark}" # Subfolder matching the VM name
-            $storageUri = "${vmFolderUri}/${csvFile.Name}?${saastoken}"
-
-            # Check if the folder exists or create it
-            Invoke-WebRequest -Uri $vmFolderUri -Method Put -Headers @{"x-ms-blob-type" = "BlockBlob"} | Out-Null
-
-            # Upload the file
-            Invoke-WebRequest -Uri $storageUri -Method Put -InFile $csvFile.FullName -Headers @{"x-ms-blob-type" = "BlockBlob"}
-            Add-Content -Path C:\obux\obux_log.txt -Value "Uploaded ${csvFile.Name} to storage account in folder ${benchmark}"
-        }
-    } else {
-        Add-Content -Path C:\obux\obux_log.txt -Value "Results folder not found, skipping upload"
+# Ensure the `C:\obux` directory exists before writing to the log file
+if (-not (Test-Path -Path 'C:\obux')) {
+    try {
+        New-Item -ItemType Directory -Path 'C:\obux' -Force | Out-Null
+        Add-Content -Path 'C:\obux\obux_log.txt' -Value 'Created C:\obux directory'
+    } catch {
+        Write-Error "Failed to create C:\obux directory: $_"
+        throw
     }
+} else {
+    Add-Content -Path 'C:\obux\obux_log.txt' -Value 'C:\obux directory already exists'
+}
+
+# Validate `storageAccountName` and ensure it is passed correctly
+if (-not $storageAccountName) {
+    Write-Error "Missing or invalid storageAccountName parameter"
+    throw
+}
+
+# Update the URI construction to handle missing or invalid values
+try {
+    $vmFolderUri = "https://${storageAccountName}.blob.core.windows.net/${containername}/${benchmark}"
+    $storageUri = "${vmFolderUri}/${csvFile.Name}?${saastoken}"
+
+    # Check if the folder exists or create it
+    Invoke-WebRequest -Uri $vmFolderUri -Method Put -Headers @{"x-ms-blob-type" = "BlockBlob"} | Out-Null
+
+    # Upload the file
+    Invoke-WebRequest -Uri $storageUri -Method Put -InFile $csvFile.FullName -Headers @{"x-ms-blob-type" = "BlockBlob"}
+    Add-Content -Path C:\obux\obux_log.txt -Value "Uploaded ${csvFile.Name} to storage account in folder ${benchmark}"
 } catch {
     Write-Error "Failed to upload CSV files to storage account: $_"
     throw
