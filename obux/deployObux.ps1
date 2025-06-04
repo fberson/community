@@ -3,36 +3,36 @@
 Automates the deployment and execution of the OBUX Benchmark tool, logs execution details, and uploads results to an Azure Storage Account.
 
 .DESCRIPTION
-This script performs the following tasks:
-1. Converts input parameters to appropriate types.
-2. Logs script execution details.
+This script:
+1. Validates input parameters.
+2. Logs execution events.
 3. Downloads and extracts the OBUX Benchmark tool.
-4. Executes the benchmark tool with provided parameters.
-5. Uploads CSV results to an Azure Storage Account, organizing them into subfolders matching the VM name.
+4. Executes the benchmark.
+5. Uploads resulting CSV files to Azure Blob Storage under a subfolder named after the benchmark name.
 
 .PARAMETER email
-The email address to associate with the benchmark results.
+Email address to associate with the results.
 
 .PARAMETER benchmark
-The name of the benchmark to execute.
+The benchmark name (used as VM identifier/folder name).
 
 .PARAMETER sharedata
-Indicates whether to share data (true/false).
+Whether to share data (true/false).
 
 .PARAMETER insightinterval
-The interval for insights in seconds.
+Time interval in seconds for insights.
 
 .PARAMETER saastoken
-The SAS token for accessing the Azure Storage Account.
+SAS token to authorize access to blob storage.
 
 .PARAMETER containername
-The name of the container in the Azure Storage Account where results will be uploaded.
+Name of the blob container in the storage account.
+
+.PARAMETER storageAccountName
+Name of the Azure Storage Account (no domain).
 
 .EXAMPLE
-powershell -ExecutionPolicy Unrestricted -File deployObux.ps1 -email "user@example.com" -benchmark "VM1" -sharedata "true" -insightinterval 60 -saastoken "<SAS_TOKEN>" -containername "results"
-
-.NOTES
-Ensure the Azure Storage Account and container are properly configured before running this script.
+powershell -ExecutionPolicy Unrestricted -File deployObux.ps1 -email "user@example.com" -benchmark "VM1" -sharedata "true" -insightinterval 60 -saastoken "<SAS_TOKEN>" -containername "results" -storageAccountName "obuxstorage"
 #>
 
 param (
@@ -45,92 +45,83 @@ param (
     [string]$storageAccountName
 )
 
-# Ensure the C:\obux directory exists before logging
-if (-not (Test-Path -Path 'C:\obux')) {
+# Ensure logging directory exists
+$logDir = "C:\obux"
+$logFile = "$logDir\obux_log.txt"
+
+if (-not (Test-Path -Path $logDir)) {
     try {
-        New-Item -ItemType Directory -Path 'C:\obux' -Force | Out-Null
+        New-Item -ItemType Directory -Path $logDir -Force | Out-Null
     } catch {
-        Write-Error "Failed to create C:\obux directory: $_"
-        throw
+        Write-Error "Failed to create log directory: $_"
+        exit 1
     }
 }
 
+# Log start
 try {
-    Add-Content -Path C:\obux\obux_log.txt -Value 'Script execution started'
+    Add-Content -Path $logFile -Value "[$(Get-Date -Format o)] Script execution started"
 } catch {
-    Write-Error "Failed to log script start: $_"
-    throw
+    Write-Error "Failed to write to log file: $_"
+    exit 1
 }
 
+# Convert sharedata to boolean
 try {
-    $sharedataBool = if ($sharedata -eq 'true') {
-        $true
-    } elseif ($sharedata -eq 'false') {
-        $false
-    } else {
-        throw "Invalid value for sharedata: $sharedata"
+    $sharedataBool = switch ($sharedata.ToLower()) {
+        'true'  { $true }
+        'false' { $false }
+        default { throw "Invalid value for sharedata: $sharedata" }
     }
 } catch {
-    Write-Error "Failed to convert sharedata to boolean: $_"
-    throw
+    Write-Error $_
+    exit 1
 }
 
+# Log parameters
+Add-Content -Path $logFile -Value "Parameters: email=$email, benchmark=$benchmark, sharedata=$sharedataBool, insightinterval=$insightinterval"
+
+# Download Benchmark Tool
 try {
-    $insightintervalInt = [int]$insightinterval
+    $zipPath = "$logDir\OBUXBenchmark.zip"
+    Invoke-WebRequest -Uri "https://media.githubusercontent.com/media/OBUX-IT/obux-benchmark/refs/heads/main/OBUXBenchmark.zip" -OutFile $zipPath
+    Add-Content -Path $logFile -Value "Downloaded OBUXBenchmark.zip"
 } catch {
-    Write-Error "Failed to convert insightinterval to integer: $_"
-    throw
+    Write-Error "Failed to download benchmark zip: $_"
+    exit 1
 }
 
+# Extract Benchmark
 try {
-    Add-Content -Path C:\obux\obux_log.txt -Value "Parameters: email=$email, benchmark=$benchmark, sharedata=$sharedataBool, insightinterval=$insightintervalInt"
+    Expand-Archive -Path $zipPath -DestinationPath "C:\Program Files\OBUX" -Force
+    Add-Content -Path $logFile -Value "Extracted benchmark to C:\Program Files\OBUX"
 } catch {
-    Write-Error "Failed to log parameters: $_"
-    throw
+    Write-Error "Failed to extract benchmark zip: $_"
+    exit 1
 }
 
+# Run Benchmark
 try {
-    Invoke-WebRequest -Uri https://media.githubusercontent.com/media/OBUX-IT/obux-benchmark/refs/heads/main/OBUXBenchmark.zip -OutFile C:\obux\OBUXBenchmark.zip
-    Add-Content -Path C:\obux\obux_log.txt -Value 'Downloaded OBUXBenchmark.zip'
+    Start-Process -Wait -FilePath "C:\Program Files\OBUX\Wrapper\OBUX Benchmark.exe" -ArgumentList "/silent /email:$email /benchmark:$benchmark /sharedata:$sharedataBool /insightinterval:$insightinterval"
+    Add-Content -Path $logFile -Value "Benchmark executed successfully"
 } catch {
-    Write-Error "Failed to download OBUX Benchmark ZIP: $_"
-    throw
+    Write-Error "Failed to run benchmark: $_"
+    exit 1
 }
 
+# Upload results to Azure Blob Storage
 try {
-    Expand-Archive -Path C:\obux\OBUXBenchmark.zip -DestinationPath "C:\Program Files\OBUX" -Force
-    Add-Content -Path C:\obux\obux_log.txt -Value 'Extracted OBUXBenchmark.zip to C:\Program Files\OBUX'
-} catch {
-    Write-Error "Failed to extract OBUX Benchmark ZIP: $_"
-    throw
-}
+    $resultPath = "C:\Program Files\OBUX\Wrapper\results"
+    $csvFiles = Get-ChildItem -Path $resultPath -Filter *.csv
 
-try {
-    Start-Process -Wait -FilePath "C:\Program Files\OBUX\Wrapper\OBUX Benchmark.exe" -ArgumentList "/silent /email:$email /benchmark:$benchmark /sharedata:$sharedataBool /insightinterval:$insightintervalInt"
-    Add-Content -Path C:\obux\obux_log.txt -Value 'OBUX Benchmark execution completed'
-} catch {
-    Write-Error "Failed to run OBUX Benchmark executable: $_"
-    throw
-}
-
-# Upload CSV files to Azure Storage Account
-if (-not $storageAccountName) {
-    Write-Error "Missing or invalid storageAccountName parameter"
-    throw
-}
-
-try {
-    $csvFiles = Get-ChildItem -Path "C:\Program Files\OBUX\results" -Filter *.csv
     foreach ($csvFile in $csvFiles) {
-        $vmFolderUri = "https://${storageAccountName}.blob.core.windows.net/${containername}/${benchmark}"
-        $storageUri = "${vmFolderUri}/${csvFile.Name}?${saastoken}"
+        $blobUri = "https://${storageAccountName}.blob.core.windows.net/${containername}/${benchmark}/${csvFile.Name}?${saastoken}"
 
-        # Upload the file
-        Invoke-WebRequest -Uri $storageUri -Method Put -InFile $csvFile.FullName -Headers @{"x-ms-blob-type" = "BlockBlob"}
+        Invoke-WebRequest -Uri $blobUri -Method Put -InFile $csvFile.FullName -Headers @{"x-ms-blob-type" = "BlockBlob"}
 
-        Add-Content -Path C:\obux\obux_log.txt -Value "Uploaded ${csvFile.Name} to storage account in folder ${benchmark}"
+        Add-Content -Path $logFile -Value "Uploaded $($csvFile.Name) to blob storage under ${benchmark}/"
     }
 } catch {
     Write-Error "Failed to upload CSV files to storage account: $_"
-    throw
+    exit 1
 }
