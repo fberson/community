@@ -53,7 +53,8 @@ $logFile = "$logDir\obux_log.txt"
 if (-not (Test-Path -Path $logDir)) {
     try {
         New-Item -ItemType Directory -Path $logDir -Force | Out-Null
-    } catch {
+    }
+    catch {
         Write-Error "Failed to create log directory: $_"
         exit 1
     }
@@ -62,7 +63,8 @@ if (-not (Test-Path -Path $logDir)) {
 # Log start
 try {
     Add-Content -Path $logFile -Value "[$(Get-Date -Format o)] Script execution started"
-} catch {
+}
+catch {
     Write-Error "Failed to write to log file: $_"
     exit 1
 }
@@ -70,11 +72,12 @@ try {
 # Convert sharedata to boolean
 try {
     $sharedataBool = switch ($sharedata.ToLower()) {
-        'true'  { $true }
+        'true' { $true }
         'false' { $false }
         default { throw "Invalid value for sharedata: $sharedata" }
     }
-} catch {
+}
+catch {
     Write-Error $_
     exit 1
 }
@@ -87,7 +90,8 @@ try {
     $zipPath = "$logDir\OBUXBenchmark.zip"
     Invoke-WebRequest -Uri "https://media.githubusercontent.com/media/OBUX-IT/obux-benchmark/refs/heads/main/OBUXBenchmark.zip" -OutFile $zipPath
     Add-Content -Path $logFile -Value "Downloaded OBUXBenchmark.zip"
-} catch {
+}
+catch {
     Write-Error "Failed to download benchmark zip: $_"
     exit 1
 }
@@ -96,7 +100,8 @@ try {
 try {
     Expand-Archive -Path $zipPath -DestinationPath "C:\Program Files\OBUX" -Force
     Add-Content -Path $logFile -Value "Extracted benchmark to C:\Program Files\OBUX"
-} catch {
+}
+catch {
     Write-Error "Failed to extract benchmark zip: $_"
     exit 1
 }
@@ -105,7 +110,8 @@ try {
 try {
     Start-Process -Wait -FilePath "C:\Program Files\OBUX\Wrapper\OBUX Benchmark.exe" -ArgumentList "/silent /email:$email /benchmark:$benchmark /sharedata:$sharedataBool /insightinterval:$insightinterval"
     Add-Content -Path $logFile -Value "Benchmark executed successfully"
-} catch {
+}
+catch {
     Write-Error "Failed to run benchmark: $_"
     exit 1
 }
@@ -116,13 +122,15 @@ try {
     $csvFiles = Get-ChildItem -Path $resultPath -Filter *.csv
 
     foreach ($csvFile in $csvFiles) {
-        $blobUri = "https://${storageAccountName}.blob.core.windows.net/${containername}/${benchmark}/${csvFile.Name}?${sasToken}"
-
-        Invoke-WebRequest -Uri $blobUri -Method Put -InFile $csvFile.FullName -Headers @{"x-ms-blob-type" = "BlockBlob"}
-
+        $blobUri = "https://${storageAccountName}.blob.core.windows.net/${containerName}/${benchmark}/$($csvFile.Name)?${sasToken}"
+        Invoke-WebRequest -Uri $blobUri -Method Put -InFile $csvFile.FullName -Headers @{"x-ms-blob-type" = "BlockBlob" }
         Add-Content -Path $logFile -Value "Uploaded $($csvFile.Name) to blob storage under ${benchmark}/"
     }
-} catch {
+}
+catch {
     Write-Error "Failed to upload CSV files to storage account: $_"
     exit 1
 }
+
+
+
