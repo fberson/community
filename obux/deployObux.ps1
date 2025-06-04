@@ -22,7 +22,7 @@ Whether to share data (true/false).
 .PARAMETER insightinterval
 Time interval in seconds for insights.
 
-.PARAMETER saastoken
+.PARAMETER sasToken
 SAS token to authorize access to blob storage.
 
 .PARAMETER containername
@@ -32,7 +32,7 @@ Name of the blob container in the storage account.
 Name of the Azure Storage Account (no domain).
 
 .EXAMPLE
-powershell -ExecutionPolicy Unrestricted -File deployObux.ps1 -email "user@example.com" -benchmark "VM1" -sharedata "true" -insightinterval 60 -saastoken "<SAS_TOKEN>" -containername "results" -storageAccountName "obuxstorage"
+powershell -ExecutionPolicy Unrestricted -File deployObux.ps1 -email "user@example.com" -benchmark "VM1" -sharedata "true" -insightinterval 60 -sasToken "<SAS_TOKEN>" -containername "results" -storageAccountName "obuxstorage"
 #>
 
 param (
@@ -40,10 +40,11 @@ param (
     [string]$benchmark,
     [string]$sharedata,
     [int]$insightinterval,
-    [string]$saastoken,
-    [string]$containername,
-    [string]$storageAccountName
+    [string]$storageAccountName,
+    [string]$containerName,
+    [string]$sasToken  # Now passed directly again, securely
 )
+
 
 # Ensure logging directory exists
 $logDir = "C:\obux"
@@ -115,7 +116,7 @@ try {
     $csvFiles = Get-ChildItem -Path $resultPath -Filter *.csv
 
     foreach ($csvFile in $csvFiles) {
-        $blobUri = "https://${storageAccountName}.blob.core.windows.net/${containername}/${benchmark}/${csvFile.Name}?${saastoken}"
+        $blobUri = "https://${storageAccountName}.blob.core.windows.net/${containername}/${benchmark}/${csvFile.Name}?${sasToken}"
 
         Invoke-WebRequest -Uri $blobUri -Method Put -InFile $csvFile.FullName -Headers @{"x-ms-blob-type" = "BlockBlob"}
 
