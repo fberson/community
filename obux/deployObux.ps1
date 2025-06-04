@@ -120,7 +120,7 @@ if (-not $storageAccountName) {
 }
 
 try {
-    $csvFiles = Get-ChildItem -Path "C:\Program Files\OBUX\Wrapper\results" -Filter *.csv
+    $csvFiles = Get-ChildItem -Path "C:\Program Files\OBUX\results" -Filter *.csv
     foreach ($csvFile in $csvFiles) {
         $vmFolderUri = "https://${storageAccountName}.blob.core.windows.net/${containername}/${benchmark}"
         $storageUri = "${vmFolderUri}/${csvFile.Name}?${saastoken}"
