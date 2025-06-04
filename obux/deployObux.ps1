@@ -111,7 +111,7 @@ try {
 
 # Upload results to Azure Blob Storage
 try {
-    $resultPath = "C:\Program Files\OBUX\Wrapper\results"
+    $resultPath = "C:\Program Files\OBUX\results"
     $csvFiles = Get-ChildItem -Path $resultPath -Filter *.csv
 
     foreach ($csvFile in $csvFiles) {
