@@ -1,220 +1,136 @@
-param location string = 'westeurope'
-param vmSizes array
+<#
+.SYNOPSIS
+Automates the deployment and execution of the OBUX Benchmark tool, logs execution details, and uploads results to an Azure Storage Account.
 
-param adminUsername string
-@secure()
-param adminPassword string
+.DESCRIPTION
+This script:
+1. Validates input parameters.
+2. Logs execution events.
+3. Downloads and extracts the OBUX Benchmark tool.
+4. Executes the benchmark.
+5. Uploads resulting CSV files to Azure Blob Storage under a subfolder named after the benchmark name.
 
-param obuxEmail string = 'you@domain.com'
-param obuxShareData bool = true
-param obuxInsightInterval int = 5
-param sourceIpAddress string
+.PARAMETER email
+Email address to associate with the results.
 
-@minLength(3)
-@maxLength(12)
-param vmNameprefix string = 'obux-vm'
+.PARAMETER benchmark
+The benchmark name (used as VM identifier/folder name).
 
-param obuxBenchmarkNameprefix string = 'run-'
+.PARAMETER sharedata
+Whether to share data (true/false).
 
-param vnetAddressPrefixes array = ['10.0.0.0/16']
-param subnetAddressPrefix string = '10.0.0.0/24'
+.PARAMETER insightinterval
+Time interval in seconds for insights.
 
-// Define obuxShareDataStr based on obuxShareData parameter
-var obuxShareDataStr = obuxShareData ? 'true' : 'false'
+.PARAMETER sasToken
+SAS token to authorize access to blob storage.
 
-// Virtual Network
-resource vnet 'Microsoft.Network/virtualNetworks@2022-11-01' = {
-  name: '${vmNameprefix}-vnet'
-  location: location
-  properties: {
-    addressSpace: {
-      addressPrefixes: vnetAddressPrefixes
+.PARAMETER containername
+Name of the blob container in the storage account.
+
+.PARAMETER storageAccountName
+Name of the Azure Storage Account (no domain).
+
+.EXAMPLE
+powershell -ExecutionPolicy Unrestricted -File deployObux.ps1 -email "user@example.com" -benchmark "VM1" -sharedata "true" -insightinterval 60 -sasToken "<SAS_TOKEN>" -containername "results" -storageAccountName "obuxstorage"
+#>
+
+param (
+    [string]$email,
+    [string]$benchmark,
+    [string]$sharedata,
+    [int]$insightinterval,
+    [string]$storageAccountName,
+    [string]$containerName,
+    [string]$sasToken  # Now passed directly again, securely
+)
+
+
+# Ensure logging directory exists
+$logDir = "C:\obux"
+$logFile = "$logDir\obux_log.txt"
+
+if (-not (Test-Path -Path $logDir)) {
+    try {
+        New-Item -ItemType Directory -Path $logDir -Force | Out-Null
     }
-    subnets: [
-      {
-        name: 'default'
-        properties: {
-          addressPrefix: subnetAddressPrefix
-        }
-      }
-    ]
-  }
+    catch {
+        Write-Error "Failed to create log directory: $_"
+        exit 1
+    }
 }
 
-// Network Security Group (NSG) and Inbound Rule for RDP Access
-resource nsg 'Microsoft.Network/networkSecurityGroups@2022-11-01' = {
-  name: '${vmNameprefix}-nsg'
-  location: location
-  properties: {
-    securityRules: [
-      {
-        name: 'Allow-RDP'
-        properties: {
-          priority: 1000
-          direction: 'Inbound'
-          access: 'Allow'
-          protocol: 'Tcp'
-          sourcePortRange: '*'
-          destinationPortRange: '3389'
-          sourceAddressPrefix: sourceIpAddress
-          destinationAddressPrefix: '*'
-        }
-      }
-    ]
-  }
+# Log start
+try {
+    Add-Content -Path $logFile -Value "[$(Get-Date -Format o)] Script execution started"
+}
+catch {
+    Write-Error "Failed to write to log file: $_"
+    exit 1
 }
 
-// Loop to create public IPs for each VM
-resource publicIPs 'Microsoft.Network/publicIPAddresses@2022-11-01' = [for (vmSize, i) in vmSizes: {
-  name: '${vmNameprefix}-${i}-pip'
-  location: location
-  sku: {
-    name: 'Basic'
-  }
-  properties: {
-    publicIPAllocationMethod: 'Dynamic'
-  }
-}]
-
-// Loop to create network interfaces for each VM
-resource nic 'Microsoft.Network/networkInterfaces@2022-11-01' = [for (vmSize, i) in vmSizes: {
-  name: '${vmNameprefix}-${i}-nic'
-  location: location
-  properties: {
-    ipConfigurations: [
-      {
-        name: 'ipconfig1'
-        properties: {
-          subnet: {
-            id: vnet.properties.subnets[0].id
-          }
-          privateIPAllocationMethod: 'Dynamic'
-          publicIPAddress: {
-            id: publicIPs[i].id
-          }
-        }
-      }
-    ]
-    networkSecurityGroup: {
-      id: nsg.id
+# Convert sharedata to boolean
+try {
+    $sharedataBool = switch ($sharedata.ToLower()) {
+        'true' { $true }
+        'false' { $false }
+        default { throw "Invalid value for sharedata: $sharedata" }
     }
-  }
-}]
-
-// Loop to deploy multiple VMs based on the vmSizes array
-resource vms 'Microsoft.Compute/virtualMachines@2023-03-01' = [for (vmSize, i) in vmSizes: {
-  name: '${vmNameprefix}-${i}'
-  location: location
-  properties: {
-    hardwareProfile: {
-      vmSize: vmSize
-    }
-    osProfile: {
-      computerName: '${vmNameprefix}-${i}'
-      adminUsername: adminUsername
-      adminPassword: adminPassword
-    }
-    storageProfile: {
-      imageReference: {
-        publisher: 'MicrosoftWindowsServer'
-        offer: 'WindowsServer'
-        sku: '2022-datacenter-azure-edition'
-        version: 'latest'
-      }
-      osDisk: {
-        createOption: 'FromImage'
-      }
-    }
-    networkProfile: {
-      networkInterfaces: [
-        {
-          id: nic[i].id
-        }
-      ]
-    }
-  }
-}]
-
-// Updated storage account name to ensure it meets Azure's naming requirements
-resource storageAccount 'Microsoft.Storage/storageAccounts@2022-09-01' = {
-  name: 'obuxvmstorage'
-  location: location
-  sku: {
-    name: 'Standard_LRS'
-  }
-  kind: 'StorageV2'
-  properties: {
-    accessTier: 'Hot'
-  }
+}
+catch {
+    Write-Error $_
+    exit 1
 }
 
-resource storageBlobContributorRole 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
-name: guid(storageAccount.id, 'StorageBlobDataContributor', replace(deployer().userPrincipalName, '@', '-'))
-  scope: storageAccount
-  properties: {
-    principalId: deployer().objectId
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
-    principalType: 'User'
-  }
+# Log parameters
+Add-Content -Path $logFile -Value "Parameters: email=$email, benchmark=$benchmark, sharedata=$sharedataBool, insightinterval=$insightinterval"
+
+# Download Benchmark Tool
+try {
+    $zipPath = "$logDir\OBUXBenchmark.zip"
+    Invoke-WebRequest -Uri "https://media.githubusercontent.com/media/OBUX-IT/obux-benchmark/refs/heads/main/OBUXBenchmark.zip" -OutFile $zipPath
+    Add-Content -Path $logFile -Value "Downloaded OBUXBenchmark.zip"
+}
+catch {
+    Write-Error "Failed to download benchmark zip: $_"
+    exit 1
 }
 
-
-// Ensure the `blobServices` resource is explicitly created
-resource blobServices 'Microsoft.Storage/storageAccounts/blobServices@2022-09-01' = {
-  parent: storageAccount
-  name: 'default'
+# Extract Benchmark
+try {
+    Expand-Archive -Path $zipPath -DestinationPath "C:\Program Files\OBUX" -Force
+    Add-Content -Path $logFile -Value "Extracted benchmark to C:\Program Files\OBUX"
+}
+catch {
+    Write-Error "Failed to extract benchmark zip: $_"
+    exit 1
 }
 
-// Ensure the `containers` resource is explicitly created
-resource storageContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2022-09-01' = {
-  parent: blobServices
-  name: 'results'
-  properties: {
-    publicAccess: 'None'
-  }
+# Run Benchmark
+try {
+    Start-Process -Wait -FilePath "C:\Program Files\OBUX\Wrapper\OBUX Benchmark.exe" -ArgumentList "/silent /email:$email /benchmark:$benchmark /sharedata:$sharedataBool /insightinterval:$insightinterval"
+    Add-Content -Path $logFile -Value "Benchmark executed successfully"
+}
+catch {
+    Write-Error "Failed to run benchmark: $_"
+    exit 1
 }
 
-// Updated the deployment name to accept a timestamp parameter
-param deploymentTimestamp string
+# Upload results to Azure Blob Storage
+try {
+    $resultPath = "C:\Program Files\OBUX\results"
+    $csvFiles = Get-ChildItem -Path $resultPath -Filter *.csv
 
-// SAS Token Generation Module
-module generateSasToken './generateSasToken.bicep' = {
-  name: 'generateSasToken-${deploymentTimestamp}'
-  params: {
-    storageAccountName: storageAccount.name
-    expiryDate: '2026-06-03T00:00:00Z' // 1 year from now
-  }
-}
-
-// Custom Script Extension to download and run OBUX securely with commandToExecute and SAS token in protectedSettings
-resource obuxExtensions 'Microsoft.Compute/virtualMachines/extensions@2022-03-01' = [for (vmSize, i) in vmSizes: {
-  name: 'obuxCustomScript-${i}'
-  parent: vms[i]
-  location: location
-  tags: {
-    displayName: 'OBUX Benchmark Extension'
-  }
-  properties: {
-    publisher: 'Microsoft.Compute'
-    type: 'CustomScriptExtension'
-    typeHandlerVersion: '1.10'
-    autoUpgradeMinorVersion: true
-    settings: {
-      fileUris: [
-        'https://raw.githubusercontent.com/fberson/community/refs/heads/main/obux/deployObux.ps1'
-      ]
+    foreach ($csvFile in $csvFiles) {
+        $blobUri = "https://${storageAccountName}.blob.core.windows.net/${containerName}/${benchmark}/$($csvFile.Name)?${sasToken}"
+        Invoke-WebRequest -Uri $blobUri -Method Put -InFile $csvFile.FullName -Headers @{"x-ms-blob-type" = "BlockBlob" }
+        Add-Content -Path $logFile -Value "Uploaded $($csvFile.Name) to blob storage under ${benchmark}/"
     }
-    protectedSettings: {
-      commandToExecute: format('powershell -ExecutionPolicy Unrestricted -File deployObux.ps1 -email "{0}" -benchmark "{1}" -sharedata "{2}" -insightinterval {3} -storageAccount "{4}" -containerName "results" -sasToken "{5}"',
-        obuxEmail,
-        '${obuxBenchmarkNameprefix}-${i}-${vmSize}',
-        obuxShareDataStr,
-        obuxInsightInterval,
-        storageAccount.name,
-        generateSasToken.outputs.sasToken
-      )
-    }
-  }
-}]
+}
+catch {
+    Write-Error "Failed to upload CSV files to storage account: $_"
+    exit 1
+}
+
 
 
