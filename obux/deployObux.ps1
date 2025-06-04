@@ -123,7 +123,8 @@ try {
 
     foreach ($csvFile in $csvFiles) {
         $blobUri = "https://${storageAccountName}.blob.core.windows.net/${containerName}/${benchmark}/$($csvFile.Name)?${sasToken}"
-        Invoke-WebRequest -Uri $blobUri -Method Put -InFile $csvFile.FullName -Headers @{"x-ms-blob-type" = "BlockBlob" }
+        Add-Content -Path $logFile -Value "Uploading to URI: $blobUri"
+        Invoke-RestMethod -Uri $blobUri -Method Put -InFile $csvFile.FullName -Headers @{ "x-ms-blob-type" = "BlockBlob" }
         Add-Content -Path $logFile -Value "Uploaded $($csvFile.Name) to blob storage under ${benchmark}/"
     }
 }
