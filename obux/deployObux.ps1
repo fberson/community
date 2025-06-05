@@ -7,8 +7,9 @@ This script:
 1. Validates input parameters.
 2. Logs execution events.
 3. Downloads and extracts the OBUX Benchmark tool.
-4. Executes the benchmark.
-5. Uploads resulting CSV files to Azure Blob Storage under a subfolder named after the benchmark name.
+4. Stores parameters in a JSON file.
+5. Creates a registry key to run the benchmark on the next login.
+6. Sets up the environment for the benchmark execution.
 
 .PARAMETER email
 Email address to associate with the results.
@@ -106,30 +107,40 @@ catch {
     exit 1
 }
 
-# Run Benchmark
+# Store parameters in JSON file
 try {
-    Start-Process -Wait -FilePath "C:\Program Files\OBUX\Wrapper\OBUX Benchmark.exe" -ArgumentList "/silent /email:$email /benchmark:$benchmark /sharedata:$sharedataBool /insightinterval:$insightinterval"
-    Add-Content -Path $logFile -Value "Benchmark executed successfully"
+    $settings = @{
+        email = $email
+        benchmark = $benchmark
+        sharedata = $sharedata
+        insightinterval = $insightinterval
+        storageAccountName = $storageAccountName
+        containerName = $containerName
+        sasToken = $sasToken
+    }
+    $settingsJson = $settings | ConvertTo-Json -Depth 10
+    $settingsFilePath = "$logDir\obux-settings.json"
+    Set-Content -Path $settingsFilePath -Value $settingsJson
+    Add-Content -Path $logFile -Value "Stored parameters in $settingsFilePath"
 }
 catch {
-    Write-Error "Failed to run benchmark: $_"
+    Write-Error "Failed to store parameters in JSON file: $_"
     exit 1
 }
 
-# Upload results to Azure Blob Storage
+# Create registry key to run OBUX on next login
 try {
-    $resultPath = "C:\Program Files\OBUX\results"
-    $csvFiles = Get-ChildItem -Path $resultPath -Filter *.csv
-
-    foreach ($csvFile in $csvFiles) {
-        $blobUri = "https://${storageAccountName}.blob.core.windows.net/${containerName}/${benchmark}/$($csvFile.Name)?${sasToken}"
-        Add-Content -Path $logFile -Value "Uploading to URI: $blobUri"
-        Invoke-RestMethod -Uri $blobUri -Method Put -InFile $csvFile.FullName -Headers @{ "x-ms-blob-type" = "BlockBlob" }
-        Add-Content -Path $logFile -Value "Uploaded $($csvFile.Name) to blob storage under ${benchmark}/"
-    }
+    $extensionBasePath = "C:\Packages\Plugins\Microsoft.Compute.CustomScriptExtension"
+    $extensionVersion = (Get-ChildItem -Path $extensionBasePath | Sort-Object Name -Descending | Select-Object -First 1).Name
+    $downloadPath = "$extensionBasePath\$extensionVersion\Downloads\0\runObux.ps1"
+    $regPath = "HKLM:\Software\Microsoft\Windows\CurrentVersion\RunOnce"
+    $regName = "RunObux"
+    $regValue = "powershell.exe -ExecutionPolicy Bypass -File $downloadPath"
+    New-ItemProperty -Path $regPath -Name $regName -Value $regValue -PropertyType String -Force
+    Add-Content -Path $logFile -Value "Created registry key for RunObux pointing to $downloadPath"
 }
 catch {
-    Write-Error "Failed to upload CSV files to storage account: $_"
+    Write-Error "Failed to create registry key: $_"
     exit 1
 }
 
